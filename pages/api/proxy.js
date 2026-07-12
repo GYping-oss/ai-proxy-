@@ -1,54 +1,44 @@
+export const config = {
+  runtime: 'edge',
+};
+
 const TARGETS = {
   chatgpt: 'https://chatgpt.com',
   claude: 'https://claude.ai',
 };
 
-export const config = {
-  api: { bodyParser: false, externalResolver: true },
-};
-
-export default async function handler(req, res) {
-  const { target, path } = req.query;
+export default async function handler(request) {
+  const url = new URL(request.url);
+  const target = url.searchParams.get('target');
+  const path = url.searchParams.get('path') || '';
   const baseUrl = TARGETS[target];
-  if (!baseUrl) return res.status(400).json({ error: 'Unknown target' });
+  
+  if (!baseUrl) return new Response('Unknown target', { status: 400 });
 
-  const targetUrl = `${baseUrl}/${(path || '').replace(/^\//, '')}`;
+  const targetUrl = `${baseUrl}/${path.replace(/^\//, '')}${url.search.replace(/^\?/, '').replace(/&?target=[^&]*/, '').replace(/&?path=[^&]*/, '') ? '?' + url.search.replace(/^\?/, '').replace(/&?target=[^&]*/, '').replace(/&?path=[^&]*/, '') : ''}`;
 
-  const headers = {};
-  Object.entries(req.headers).forEach(([k, v]) => {
-    if (!['host', 'x-forwarded-host', 'connection'].includes(k)) {
-      headers[k] = Array.isArray(v) ? v[0] : v || '';
-    }
-  });
-  headers['host'] = new URL(baseUrl).host;
-  headers['accept-encoding'] = 'identity';
+  const headers = new Headers(request.headers);
+  headers.set('host', new URL(baseUrl).host);
+  ['x-forwarded-host', 'x-real-ip', 'x-vercel-ip', 'x-vercel-proxy'].forEach(h => headers.delete(h));
 
   try {
     const response = await fetch(targetUrl, {
-      method: req.method,
+      method: request.method,
       headers,
-      body: req.method !== 'GET' && req.method !== 'HEAD' ? req.body : undefined,
+      body: request.method !== 'GET' && request.method !== 'HEAD' ? request.body : undefined,
       redirect: 'manual',
     });
 
-    res.status(response.status);
-    response.headers.forEach((v, k) => {
-      if (!['content-security-policy', 'x-frame-options', 'content-encoding'].includes(k.toLowerCase())) {
-        res.setHeader(k, v);
-      }
-    });
-    res.setHeader('access-control-allow-origin', '*');
+    const resHeaders = new Headers(response.headers);
+    ['content-security-policy', 'x-frame-options'].forEach(h => resHeaders.delete(h));
+    resHeaders.set('access-control-allow-origin', '*');
 
-    if (response.body) {
-      const reader = response.body.getReader();
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        res.write(value);
-      }
-    }
-    res.end();
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: resHeaders,
+    });
   } catch (e) {
-    res.status(502).json({ error: e.message });
+    return new Response(e.message, { status: 502 });
   }
 }
