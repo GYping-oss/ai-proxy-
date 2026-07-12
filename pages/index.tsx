@@ -1,11 +1,13 @@
+import Link from "next/link";
+
 export default function Home() {
   return (
-    <div style={{ fontFamily: 'system-ui', padding: 40, textAlign: 'center' }}>
+    <div style={{ fontFamily: "system-ui", padding: 60, textAlign: "center" }}>
       <h1>AI Proxy</h1>
-      <p>
-        <a href="/chatgpt/">ChatGPT</a> &nbsp;|&nbsp; 
-        <a href="/claude/">Claude</a>
-      </p>
+      <div style={{ marginTop: 30, fontSize: 18 }}>
+        <Link href="/chatgpt/" style={{ marginRight: 20 }}>ChatGPT</Link>
+        <Link href="/claude/">Claude</Link>
+      </div>
     </div>
   );
 }
